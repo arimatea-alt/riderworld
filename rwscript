@@ -1,0 +1,459 @@
+print("Rider Trial Auto") -- LocalScript (StarterPlayerScripts)
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local StarterGui = game:GetService("StarterGui")
+local UserInputService = game:GetService("UserInputService")
+local WORKSPACE = game:GetService("Workspace")
+
+-- ====== Remote ======
+local RiderTrialRemote = ReplicatedStorage:WaitForChild("Remote"):WaitForChild("Event"):WaitForChild("RiderTrial")
+local DimensionWorldRemote = ReplicatedStorage:WaitForChild("Remote"):WaitForChild("Specific"):WaitForChild("DimensionWorldRemote")
+
+local player = Players.LocalPlayer
+
+-- ====== Boss Config ======
+local LIVES_FOLDER_NAME = "Lives"
+local BOSS_NAME = "Hunter Lv.70"
+
+local function getLivesFolder()
+	return WORKSPACE:FindFirstChild(LIVES_FOLDER_NAME)
+end
+
+local function isBossPresent()
+	local lives = getLivesFolder()
+	return lives and lives:FindFirstChild(BOSS_NAME) ~= nil
+end
+
+-- ====== AUTO EQUIP ATTACK TOOL ======
+local TOOL_NAME = "Attack"
+
+local function equipAttackTool()
+	local character = player.Character or player.CharacterAdded:Wait()
+	local humanoid = character:WaitForChild("Humanoid")
+	local backpack = player:WaitForChild("Backpack")
+
+	local tool = backpack:FindFirstChild(TOOL_NAME)
+	if tool and tool:IsA("Tool") then
+		humanoid:EquipTool(tool)
+	end
+end
+
+if player.Character then
+	equipAttackTool()
+end
+
+player.CharacterAdded:Connect(function()
+	task.wait(0.5)
+	equipAttackTool()
+end)
+
+-- ====== GET HANDLER EVENT (COMMON) ======
+local function getHandlerEvent()
+	local character = player.Character
+	if not character or not character.Parent then return nil end
+
+	local ok, result = pcall(function()
+		local handler = character:WaitForChild("PlayerHandler", 3)
+		if not handler then return nil end
+		return handler:WaitForChild("HandlerEvent", 3)
+	end)
+
+	return ok and result or nil
+end
+
+-- ====== AUTO HENSHIN ======
+local function autoHenshin()
+	local handlerEvent = getHandlerEvent()
+	if not handlerEvent then return false end
+
+	local success = pcall(function()
+		local args = { { Henshin = true } }
+		handlerEvent:FireServer(unpack(args))
+	end)
+
+	if success then
+		StarterGui:SetCore("SendNotification", {Title = "Henshin", Text = "EXECUTED!", Duration = 2})
+		return true
+	end
+	return false
+end
+
+-- ====== AUTO SHARK (7s) ======
+local function executeAutoShark()
+	task.wait(7)
+	DimensionWorldRemote:InvokeServer({"GUI"})
+	task.wait(0.5)
+	DimensionWorldRemote:InvokeServer({"WeaponSelected", "Shark", "Shark Vent"})
+	task.wait(0.5)
+	DimensionWorldRemote:InvokeServer({"Transform", "Shark"})
+	StarterGui:SetCore("SendNotification", {Title = "Shark", Text = "COMPLETE!", Duration = 2})
+
+	task.delay(2, function()
+		equipAttackTool()
+		StarterGui:SetCore("SendNotification", {Title = "Attack", Text = "EQUIPPED!", Duration = 2})
+	end)
+end
+
+-- ====== AUTO ATTACK (HEAVY 2.5s → E 2.5s → V 5s) ======
+local MOUSE_CFRAME = CFrame.new(-2678.40234375, 0.7871074, -674.6618652, 1,0,0, 0,1,0, 0,0,1)
+
+local autoAttackRunning = false
+
+local function fireHeavyAttack()
+	local handlerEvent = getHandlerEvent()
+	if not handlerEvent then return end
+
+	local args = {
+		{
+			CombatAction = true,
+			AttackType = "Down",
+			HeavyAttack = true,
+			MouseData = MOUSE_CFRAME
+		}
+	}
+	handlerEvent:FireServer(unpack(args))
+end
+
+local function fireSkill(key)
+	local handlerEvent = getHandlerEvent()
+	if not handlerEvent then return end
+
+	local args = {
+		{
+			Skill = true,
+			AttackType = "Down",
+			Key = key,
+			MouseData = MOUSE_CFRAME
+		}
+	}
+	handlerEvent:FireServer(unpack(args))
+end
+
+local function startAutoAttack()
+	if autoAttackRunning then return end
+	autoAttackRunning = true
+
+	task.spawn(function()
+		while autoAttackRunning and isBossPresent() do
+			fireHeavyAttack()
+			task.wait(2.5)
+
+			fireSkill("E")
+			task.wait(2.5)
+
+			fireSkill("V")
+			task.wait(5)
+		end
+
+		autoAttackRunning = false
+	end)
+end
+
+local function stopAutoAttack()
+	autoAttackRunning = false
+end
+
+-- ====== SEQUENCES (TRIAL FLOW) ======
+local function startTrial()
+	RiderTrialRemote:FireServer("Trial of Diend")
+end
+
+local function initialSequence()
+	task.wait(2)
+	autoHenshin()
+	task.wait(1)
+	task.spawn(executeAutoShark)
+end
+
+local function respawnSequence()
+	task.wait(5)
+	autoHenshin()
+	task.wait(1)
+	task.spawn(executeAutoShark)
+end
+
+-- ====== AUTO LOOP STATE ======
+local autoLoopEnabled = false
+local loopConnection = nil
+local autoResetEnabled = true
+
+-- ================= GUI + FLOATING CIRCLE ICON =================
+
+local playerGui = player:WaitForChild("PlayerGui")
+local gui = Instance.new("ScreenGui")
+gui.Name = "TrialAuto"
+gui.ResetOnSpawn = false
+gui.Parent = playerGui
+
+-- Frame utama
+local frame = Instance.new("Frame")
+frame.Size = UDim2.fromOffset(280, 220)
+frame.Position = UDim2.new(0, 20, 0.5, -110)
+frame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+frame.BorderSizePixel = 0
+frame.Parent = gui
+local frameCorner = Instance.new("UICorner")
+frameCorner.CornerRadius = UDim.new(0, 12)
+frameCorner.Parent = frame
+
+local gradient = Instance.new("UIGradient")
+gradient.Color = ColorSequence.new{
+	ColorSequenceKeypoint.new(0, Color3.fromRGB(45, 45, 55)),
+	ColorSequenceKeypoint.new(1, Color3.fromRGB(25, 25, 30))
+}
+gradient.Rotation = 45
+gradient.Parent = frame
+
+-- DRAG HANDLE
+local dragHandle = Instance.new("Frame")
+dragHandle.Size = UDim2.new(1, 0, 0, 40)
+dragHandle.Position = UDim2.new(0, 0, 0, 0)
+dragHandle.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+dragHandle.BorderSizePixel = 0
+dragHandle.Parent = frame
+local dragCorner = Instance.new("UICorner")
+dragCorner.CornerRadius = UDim.new(0, 12)
+dragCorner.Parent = dragHandle
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, -70, 1, 0)
+title.Position = UDim2.new(0, 15, 0, 0)
+title.BackgroundTransparency = 1
+title.Text = "TRIAL AUTO"
+title.TextColor3 = Color3.fromRGB(0, 255, 150)
+title.Font = Enum.Font.GothamBold
+title.TextSize = 18
+title.TextXAlignment = Enum.TextXAlignment.Left
+title.Parent = dragHandle
+
+local dragIcon = Instance.new("TextLabel")
+dragIcon.Size = UDim2.new(0, 20, 1, 0)
+dragIcon.Position = UDim2.new(1, -25, 0, 0)
+dragIcon.BackgroundTransparency = 1
+dragIcon.Text = "⋮⋮"
+dragIcon.TextColor3 = Color3.fromRGB(150, 150, 150)
+dragIcon.Font = Enum.Font.GothamBold
+dragIcon.TextSize = 18
+dragIcon.Parent = dragHandle
+
+-- Tombol minimize
+local minimizeBtn = Instance.new("TextButton")
+minimizeBtn.Size = UDim2.new(0, 24, 0, 24)
+minimizeBtn.Position = UDim2.new(1, -40, 0.5, -12)
+minimizeBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
+minimizeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+minimizeBtn.Text = "-"
+minimizeBtn.Font = Enum.Font.GothamBold
+minimizeBtn.TextSize = 18
+minimizeBtn.Parent = dragHandle
+local minimizeCorner = Instance.new("UICorner")
+minimizeCorner.CornerRadius = UDim.new(1, 0)
+minimizeCorner.Parent = minimizeBtn
+
+-- Floating icon bulat kecil (selalu dibuat, awalnya hidden)
+local floatButton = Instance.new("TextButton")
+floatButton.Name = "TrialAutoFloat"
+floatButton.Size = UDim2.fromOffset(48, 48)
+floatButton.Position = UDim2.new(0, 10, 0.5, -24) -- pojok kiri tengah biar kelihatan
+floatButton.BackgroundColor3 = Color3.fromRGB(0, 255, 150)
+floatButton.TextColor3 = Color3.fromRGB(0, 0, 0)
+floatButton.Text = "TA"
+floatButton.Font = Enum.Font.GothamBold
+floatButton.TextSize = 16
+floatButton.AutoButtonColor = true
+floatButton.Visible = false
+floatButton.Parent = gui
+local floatCorner = Instance.new("UICorner")
+floatCorner.CornerRadius = UDim.new(1, 0) -- circle
+floatCorner.Parent = floatButton
+
+-- ====== DRAG HELPER ======
+local function makeDraggable(obj, dragInputObj)
+	local dragging = false
+	local dragStart, startPos
+
+	local function update(input)
+		local delta = input.Position - dragStart
+		obj.Position = UDim2.new(
+			startPos.X.Scale,
+			startPos.X.Offset + delta.X,
+			startPos.Y.Scale,
+			startPos.Y.Offset + delta.Y
+		)
+	end
+
+	dragInputObj.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1
+		or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = true
+			dragStart = input.Position
+			startPos = obj.Position
+
+			input.Changed:Connect(function()
+				if input.UserInputState == Enum.UserInputState.End then
+					dragging = false
+				end
+			end)
+		end
+	end)
+
+	UserInputService.InputChanged:Connect(function(input)
+		if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement
+			or input.UserInputType == Enum.UserInputType.Touch) then
+			update(input)
+		end
+	end)
+end
+
+makeDraggable(frame, dragHandle)
+makeDraggable(floatButton, floatButton)
+
+-- ====== BUTTONS DI FRAME ======
+local autoLoopBtn = Instance.new("TextButton")
+autoLoopBtn.Size = UDim2.new(1, -20, 0, 45)
+autoLoopBtn.Position = UDim2.fromOffset(10, 55)
+autoLoopBtn.BackgroundColor3 = Color3.fromRGB(255, 215, 0)
+autoLoopBtn.TextColor3 = Color3.fromRGB(0, 0, 0)
+autoLoopBtn.Text = "AUTO LOOP: OFF"
+autoLoopBtn.Font = Enum.Font.GothamBold
+autoLoopBtn.TextSize = 16
+autoLoopBtn.Parent = frame
+local loopCorner = Instance.new("UICorner")
+loopCorner.CornerRadius = UDim.new(0, 10)
+loopCorner.Parent = autoLoopBtn
+
+local trialBtn = Instance.new("TextButton")
+trialBtn.Size = UDim2.new(1, -20, 0, 40)
+trialBtn.Position = UDim2.fromOffset(10, 110)
+trialBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
+trialBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+trialBtn.Text = "START TRIAL"
+trialBtn.Font = Enum.Font.GothamBold
+trialBtn.TextSize = 15
+trialBtn.Parent = frame
+local trialCorner = Instance.new("UICorner")
+trialCorner.CornerRadius = UDim.new(0, 10)
+trialCorner.Parent = trialBtn
+
+local resetBtn = Instance.new("TextButton")
+resetBtn.Size = UDim2.new(1, -20, 0, 35)
+resetBtn.Position = UDim2.fromOffset(10, 160)
+resetBtn.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+resetBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+resetBtn.Text = "RESET: ON"
+resetBtn.Font = Enum.Font.GothamBold
+resetBtn.TextSize = 14
+resetBtn.Parent = frame
+local resetCorner = Instance.new("UICorner")
+resetCorner.CornerRadius = UDim.new(0, 10)
+resetCorner.Parent = resetBtn
+
+local bossLabel = Instance.new("TextLabel")
+bossLabel.Size = UDim2.new(1, -20, 0, 20)
+bossLabel.Position = UDim2.fromOffset(10, 205)
+bossLabel.BackgroundTransparency = 1
+bossLabel.Text = "Boss: Hunter Lv.70"
+bossLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+bossLabel.Font = Enum.Font.Gotham
+bossLabel.TextSize = 13
+bossLabel.TextXAlignment = Enum.TextXAlignment.Left
+bossLabel.Parent = frame
+
+-- ====== MINIMIZE / RESTORE ======
+minimizeBtn.MouseButton1Click:Connect(function()
+	frame.Visible = false
+	floatButton.Visible = true
+	-- bisa hilangkan baris di bawah kalau tidak ingin ikut posisi terakhir frame
+	-- floatButton.Position = UDim2.new(0, frame.Position.X.Offset, 0, frame.Position.Y.Offset)
+end)
+
+floatButton.MouseButton1Click:Connect(function()
+	frame.Visible = true
+	floatButton.Visible = false
+end)
+
+-- ====== BUTTON EVENTS (AUTO LOOP/TRIAL/RESET) ======
+autoLoopBtn.MouseButton1Click:Connect(function()
+	if autoLoopEnabled then
+		autoLoopEnabled = false
+		if loopConnection then loopConnection:Disconnect() end
+		autoLoopBtn.BackgroundColor3 = Color3.fromRGB(255, 215, 0)
+		autoLoopBtn.TextColor3 = Color3.fromRGB(0, 0, 0)
+		autoLoopBtn.Text = "AUTO LOOP: OFF"
+		StarterGui:SetCore("SendNotification", {Title = "Auto Loop", Text = "STOPPED", Duration = 2})
+	else
+		autoLoopEnabled = true
+		autoLoopBtn.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+		autoLoopBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+		autoLoopBtn.Text = "AUTO LOOP: ON"
+
+		startTrial()
+		task.spawn(initialSequence)
+
+		loopConnection = player.CharacterAdded:Connect(function()
+			if not autoLoopEnabled then return end
+			task.spawn(function()
+				respawnSequence()
+				task.wait(12)
+				if autoLoopEnabled then startTrial() end
+			end)
+		end)
+
+		StarterGui:SetCore("SendNotification", {Title = "Auto Loop", Text = "2s→Henshin→Shark7s→Attack+AutoAtk", Duration = 3})
+	end
+end)
+
+trialBtn.MouseButton1Click:Connect(function()
+	startTrial()
+	StarterGui:SetCore("SendNotification", {Title = "Trial", Text = "STARTED!", Duration = 2})
+end)
+
+resetBtn.MouseButton1Click:Connect(function()
+	autoResetEnabled = not autoResetEnabled
+	resetBtn.BackgroundColor3 = autoResetEnabled and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0)
+	resetBtn.Text = autoResetEnabled and "RESET: ON" or "RESET: OFF"
+end)
+
+-- ====== BOSS MONITOR + AUTO ATTACK START/STOP ======
+local function updateBossStatus()
+	local present = isBossPresent()
+	bossLabel.TextColor3 = present and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 100, 100)
+	bossLabel.Text = present and "[LIVE] Boss: Hunter Lv.70" or "[DEAD] Boss: Hunter Lv.70"
+end
+
+local lives = getLivesFolder()
+if lives then
+	lives.ChildAdded:Connect(function(child)
+		if child.Name == BOSS_NAME then
+			updateBossStatus()
+			startAutoAttack()
+		end
+	end)
+
+	lives.ChildRemoved:Connect(function(child)
+		if child.Name == BOSS_NAME then
+			updateBossStatus()
+			stopAutoAttack()
+
+			if autoResetEnabled then
+				task.wait(0.5)
+				local character = player.Character
+				if character and character:FindFirstChild("Humanoid") then
+					character.Humanoid.Health = 0
+				end
+			end
+		end
+	end)
+end
+updateBossStatus()
+
+-- Toggle GUI (RightShift) untuk PC
+UserInputService.InputBegan:Connect(function(input, gp)
+	if gp then return end
+	if input.KeyCode == Enum.KeyCode.RightShift then
+		local newState = not frame.Visible
+		frame.Visible = newState
+		floatButton.Visible = not newState
+	end
+end)
