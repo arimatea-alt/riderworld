@@ -5,6 +5,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local StarterGui = game:GetService("StarterGui")
 local UserInputService = game:GetService("UserInputService")
 local WORKSPACE = game:GetService("Workspace")
+local TweenService = game:GetService("TweenService")
 
 -- ====== Remote ======
 local RiderTrialRemote = ReplicatedStorage:WaitForChild("Remote"):WaitForChild("Event"):WaitForChild("RiderTrial")
@@ -23,6 +24,12 @@ end
 local function isBossPresent()
 	local lives = getLivesFolder()
 	return lives and lives:FindFirstChild(BOSS_NAME) ~= nil
+end
+
+local function getBossModel()
+	local lives = getLivesFolder()
+	if not lives then return nil end
+	return lives:FindFirstChild(BOSS_NAME)
 end
 
 -- ====== AUTO EQUIP ATTACK TOOL ======
@@ -95,10 +102,11 @@ local function executeAutoShark()
 	end)
 end
 
--- ====== AUTO ATTACK (HEAVY 2.5s → E 2.5s → V 5s) ======
+-- ====== AUTO ATTACK (HEAVY + E + V SPAM) ======
 local MOUSE_CFRAME = CFrame.new(-2678.40234375, 0.7871074, -674.6618652, 1,0,0, 0,1,0, 0,0,1)
 
 local autoAttackRunning = false
+local ATTACK_DELAY = 0.5 -- delay spam semua skill (atur sesuai aman/nyaman)
 
 local function fireHeavyAttack()
 	local handlerEvent = getHandlerEvent()
@@ -136,14 +144,12 @@ local function startAutoAttack()
 
 	task.spawn(function()
 		while autoAttackRunning and isBossPresent() do
+			-- tekan semuanya sekaligus
 			fireHeavyAttack()
-			task.wait(2.5)
-
 			fireSkill("E")
-			task.wait(2.5)
-
 			fireSkill("V")
-			task.wait(5)
+
+			task.wait(ATTACK_DELAY)
 		end
 
 		autoAttackRunning = false
@@ -152,6 +158,53 @@ end
 
 local function stopAutoAttack()
 	autoAttackRunning = false
+end
+
+-- ====== AUTO APPROACH BOSS (~7 studs) ======
+local autoApproachRunning = false
+
+local function startAutoApproach()
+	if autoApproachRunning then return end
+	autoApproachRunning = true
+
+	task.spawn(function()
+		while autoApproachRunning and isBossPresent() do
+			local boss = getBossModel()
+			local character = player.Character
+			if boss and character and character:FindFirstChild("HumanoidRootPart") then
+				local hrp = character.HumanoidRootPart
+				local bossRoot = boss:FindFirstChild("HumanoidRootPart") or boss:FindFirstChild("Torso") or boss.PrimaryPart
+
+				if bossRoot then
+					local bossPos = bossRoot.Position
+					local playerPos = hrp.Position
+					local dir = (bossPos - playerPos)
+
+					if dir.Magnitude > 0 then
+						local targetPos
+						if dir.Magnitude > 7 then
+							local unit = dir.Unit
+							targetPos = bossPos - unit * 7
+						else
+							targetPos = playerPos
+						end
+
+						local tweenInfo = TweenInfo.new(0.35, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
+						local tween = TweenService:Create(hrp, tweenInfo, {CFrame = CFrame.new(targetPos, bossPos)})
+						tween:Play()
+					end
+				end
+			end
+
+			task.wait(0.4)
+		end
+
+		autoApproachRunning = false
+	end)
+end
+
+local function stopAutoApproach()
+	autoApproachRunning = false
 end
 
 -- ====== SEQUENCES (TRIAL FLOW) ======
@@ -251,11 +304,11 @@ local minimizeCorner = Instance.new("UICorner")
 minimizeCorner.CornerRadius = UDim.new(1, 0)
 minimizeCorner.Parent = minimizeBtn
 
--- Floating icon bulat kecil (selalu dibuat, awalnya hidden)
+-- Floating icon bulat kecil
 local floatButton = Instance.new("TextButton")
 floatButton.Name = "TrialAutoFloat"
 floatButton.Size = UDim2.fromOffset(48, 48)
-floatButton.Position = UDim2.new(0, 10, 0.5, -24) -- pojok kiri tengah biar kelihatan
+floatButton.Position = UDim2.new(0, 10, 0.5, -24)
 floatButton.BackgroundColor3 = Color3.fromRGB(0, 255, 150)
 floatButton.TextColor3 = Color3.fromRGB(0, 0, 0)
 floatButton.Text = "TA"
@@ -265,7 +318,7 @@ floatButton.AutoButtonColor = true
 floatButton.Visible = false
 floatButton.Parent = gui
 local floatCorner = Instance.new("UICorner")
-floatCorner.CornerRadius = UDim.new(1, 0) -- circle
+floatCorner.CornerRadius = UDim.new(1, 0)
 floatCorner.Parent = floatButton
 
 -- ====== DRAG HELPER ======
@@ -364,8 +417,6 @@ bossLabel.Parent = frame
 minimizeBtn.MouseButton1Click:Connect(function()
 	frame.Visible = false
 	floatButton.Visible = true
-	-- bisa hilangkan baris di bawah kalau tidak ingin ikut posisi terakhir frame
-	-- floatButton.Position = UDim2.new(0, frame.Position.X.Offset, 0, frame.Position.Y.Offset)
 end)
 
 floatButton.MouseButton1Click:Connect(function()
@@ -395,12 +446,14 @@ autoLoopBtn.MouseButton1Click:Connect(function()
 			if not autoLoopEnabled then return end
 			task.spawn(function()
 				respawnSequence()
-				task.wait(12)
-				if autoLoopEnabled then startTrial() end
+				task.wait(3) -- delay 3 detik setelah respawn sebelum trial berikutnya
+				if autoLoopEnabled then
+					startTrial()
+				end
 			end)
 		end)
 
-		StarterGui:SetCore("SendNotification", {Title = "Auto Loop", Text = "2s→Henshin→Shark7s→Attack+AutoAtk", Duration = 3})
+		StarterGui:SetCore("SendNotification", {Title = "Auto Loop", Text = "2s→Henshin→Shark7s→Approach+AutoAtk", Duration = 3})
 	end
 end)
 
@@ -415,7 +468,7 @@ resetBtn.MouseButton1Click:Connect(function()
 	resetBtn.Text = autoResetEnabled and "RESET: ON" or "RESET: OFF"
 end)
 
--- ====== BOSS MONITOR + AUTO ATTACK START/STOP ======
+-- ====== BOSS MONITOR + AUTO ATTACK & APPROACH START/STOP ======
 local function updateBossStatus()
 	local present = isBossPresent()
 	bossLabel.TextColor3 = present and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 100, 100)
@@ -428,6 +481,7 @@ if lives then
 		if child.Name == BOSS_NAME then
 			updateBossStatus()
 			startAutoAttack()
+			startAutoApproach()
 		end
 	end)
 
@@ -435,6 +489,7 @@ if lives then
 		if child.Name == BOSS_NAME then
 			updateBossStatus()
 			stopAutoAttack()
+			stopAutoApproach()
 
 			if autoResetEnabled then
 				task.wait(0.5)
@@ -448,7 +503,6 @@ if lives then
 end
 updateBossStatus()
 
--- Toggle GUI (RightShift) untuk PC
 UserInputService.InputBegan:Connect(function(input, gp)
 	if gp then return end
 	if input.KeyCode == Enum.KeyCode.RightShift then
