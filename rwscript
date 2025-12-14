@@ -1,307 +1,276 @@
-print("Rider Trial Auto - Diend Loop") -- LocalScript (StarterPlayerScripts)
+-- TRIAL DIEND LOOP - MODERN GUI (15s DELAY)
+print("=== TRIAL AUTO MODERN LOADED ===")
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local StarterGui = game:GetService("StarterGui")
+local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
-local WORKSPACE = game:GetService("Workspace")
-
--- ====== Remote ======
-local RiderTrialRemote = ReplicatedStorage:WaitForChild("Remote"):WaitForChild("Event"):WaitForChild("RiderTrial")
 
 local player = Players.LocalPlayer
-
--- ====== Boss Config ======
-local LIVES_FOLDER_NAME = "Lives"
-local BOSS_70_NAME = "Hunter Lv.70"
-local BOSS_90_NAME = "Hunter Lv.90"
-
-local function getLivesFolder()
-\treturn WORKSPACE:FindFirstChild(LIVES_FOLDER_NAME)
-end
-
-local function isBoss70Present()
-\tlocal lives = getLivesFolder()
-\treturn lives and lives:FindFirstChild(BOSS_70_NAME) ~= nil
-end
-
-local function isBoss90Present()
-\tlocal lives = getLivesFolder()
-\treturn lives and lives:FindFirstChild(BOSS_90_NAME) ~= nil
-end
-
--- ====== TRIAL FUNCTIONS ======
-local function startTrial()
-\tRiderTrialRemote:FireServer("Trial of Diend")
-\tStarterGui:SetCore("SendNotification", {Title = "Trial", Text = "STARTED!", Duration = 2})
-end
-
--- ====== AUTO LOOP STATE ======
-local autoLoopEnabled = false
-local loopConnection = nil
-
--- ====== GUI ======
 local playerGui = player:WaitForChild("PlayerGui")
-local gui = Instance.new("ScreenGui")
-gui.Name = "TrialAuto"
-gui.ResetOnSpawn = false
-gui.Parent = playerGui
 
--- Frame utama
-local frame = Instance.new("Frame")
-frame.Size = UDim2.fromOffset(280, 120)
-frame.Position = UDim2.new(0, 20, 0.5, -60)
-frame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
-frame.BorderSizePixel = 0
-frame.Parent = gui
-local frameCorner = Instance.new("UICorner")
-frameCorner.CornerRadius = UDim.new(0, 12)
-frameCorner.Parent = frame
+print("PlayerGui found")
 
+-- Simple wait for remote
+repeat task.wait(0.1) until ReplicatedStorage:FindFirstChild("Remote")
+print("Remote folder found")
+
+local RiderTrialRemote = ReplicatedStorage.Remote.Event:WaitForChild("RiderTrial", 10)
+print("RiderTrial remote found:", RiderTrialRemote ~= nil)
+
+-- Config
+local LIVES_FOLDER_NAME = "Lives"
+local BOSS_90_NAME = "Hunter Lv.90"
+local DELAY_TIME = 15 -- 15 detik delay
+
+-- Variables
+local autoLoopEnabled = false
+local waitingForRestart = false
+local frameMinimized = false
+local mainFrameHeight = 140
+local miniFrameHeight = 50
+
+-- Create MODERN GUI
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "TrialAutoGUI"
+screenGui.ResetOnSpawn = false
+screenGui.DisplayOrder = 100
+screenGui.Parent = playerGui
+
+-- Main Frame
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 280, 0, mainFrameHeight)
+mainFrame.Position = UDim2.new(0, 30, 0.3, 0)
+mainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+mainFrame.BorderSizePixel = 0
+mainFrame.Parent = screenGui
+
+local mainCorner = Instance.new("UICorner")
+mainCorner.CornerRadius = UDim.new(0, 16)
+mainCorner.Parent = mainFrame
+
+-- Gradient background
 local gradient = Instance.new("UIGradient")
 gradient.Color = ColorSequence.new{
-\tColorSequenceKeypoint.new(0, Color3.fromRGB(45, 45, 55)),
-\tColorSequenceKeypoint.new(1, Color3.fromRGB(25, 25, 30))
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(45, 45, 60)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(20, 20, 35))
 }
 gradient.Rotation = 45
-gradient.Parent = frame
+gradient.Parent = mainFrame
 
--- DRAG HANDLE
-local dragHandle = Instance.new("Frame")
-dragHandle.Size = UDim2.new(1, 0, 0, 40)
-dragHandle.Position = UDim2.new(0, 0, 0, 0)
-dragHandle.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
-dragHandle.BorderSizePixel = 0
-dragHandle.Parent = frame
-local dragCorner = Instance.new("UICorner")
-dragCorner.CornerRadius = UDim.new(0, 12)
-dragCorner.Parent = dragHandle
+-- Shadow effect
+local shadow = Instance.new("Frame")
+shadow.Size = UDim2.new(1, 8, 1, 8)
+shadow.Position = UDim2.new(0, -4, 0, -4)
+shadow.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+shadow.BackgroundTransparency = 0.7
+shadow.ZIndex = mainFrame.ZIndex - 1
+shadow.Parent = screenGui
 
-local title = Instance.new("TextLabel")
-title.Size = UDim2.new(1, -70, 1, 0)
-title.Position = UDim2.new(0, 15, 0, 0)
-title.BackgroundTransparency = 1
-title.Text = "TRIAL DIEND LOOP"
-title.TextColor3 = Color3.fromRGB(0, 255, 150)
-title.Font = Enum.Font.GothamBold
-title.TextSize = 18
-title.TextXAlignment = Enum.TextXAlignment.Left
-title.Parent = dragHandle
+local shadowCorner = Instance.new("UICorner")
+shadowCorner.CornerRadius = UDim.new(0, 20)
+shadowCorner.Parent = shadow
 
-local dragIcon = Instance.new("TextLabel")
-dragIcon.Size = UDim2.new(0, 20, 1, 0)
-dragIcon.Position = UDim2.new(1, -25, 0, 0)
-dragIcon.BackgroundTransparency = 1
-dragIcon.Text = "⋮⋮"
-dragIcon.TextColor3 = Color3.fromRGB(150, 150, 150)
-dragIcon.Font = Enum.Font.GothamBold
-dragIcon.TextSize = 18
-dragIcon.Parent = dragHandle
+-- Title Bar
+local titleBar = Instance.new("Frame")
+titleBar.Size = UDim2.new(1, 0, 0, 45)
+titleBar.BackgroundColor3 = Color3.fromRGB(35, 35, 50)
+titleBar.BorderSizePixel = 0
+titleBar.Parent = mainFrame
 
--- Tombol minimize
+local titleCorner = Instance.new("UICorner")
+titleCorner.CornerRadius = UDim.new(0, 16)
+titleCorner.Parent = titleBar
+
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Size = UDim2.new(1, -60, 1, 0)
+titleLabel.Position = UDim2.new(0, 15, 0, 0)
+titleLabel.BackgroundTransparency = 1
+titleLabel.Text = "🎮 TRIAL DIEND LOOP"
+titleLabel.TextColor3 = Color3.fromRGB(0, 255, 150)
+titleLabel.TextScaled = true
+titleLabel.Font = Enum.Font.GothamBold
+titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+titleLabel.Parent = titleBar
+
+-- Minimize Button
 local minimizeBtn = Instance.new("TextButton")
-minimizeBtn.Size = UDim2.new(0, 24, 0, 24)
-minimizeBtn.Position = UDim2.new(1, -40, 0.5, -12)
-minimizeBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
+minimizeBtn.Size = UDim2.new(0, 30, 0, 30)
+minimizeBtn.Position = UDim2.new(1, -40, 0.5, -15)
+minimizeBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 80)
 minimizeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-minimizeBtn.Text = "-"
+minimizeBtn.Text = "−"
 minimizeBtn.Font = Enum.Font.GothamBold
-minimizeBtn.TextSize = 18
-minimizeBtn.Parent = dragHandle
-local minimizeCorner = Instance.new("UICorner")
-minimizeCorner.CornerRadius = UDim.new(1, 0)
-minimizeCorner.Parent = minimizeBtn
+minimizeBtn.TextScaled = true
+minimizeBtn.Parent = titleBar
 
--- Floating icon
-local floatButton = Instance.new("TextButton")
-floatButton.Name = "TrialAutoFloat"
-floatButton.Size = UDim2.fromOffset(48, 48)
-floatButton.Position = UDim2.new(0, 10, 0.5, -24)
-floatButton.BackgroundColor3 = Color3.fromRGB(0, 255, 150)
-floatButton.TextColor3 = Color3.fromRGB(0, 0, 0)
-floatButton.Text = "TD"
-floatButton.Font = Enum.Font.GothamBold
-floatButton.TextSize = 16
-floatButton.AutoButtonColor = true
-floatButton.Visible = false
-floatButton.Parent = gui
-local floatCorner = Instance.new("UICorner")
-floatCorner.CornerRadius = UDim.new(1, 0)
-floatCorner.Parent = floatButton
+local minCorner = Instance.new("UICorner")
+minCorner.CornerRadius = UDim.new(0, 8)
+minCorner.Parent = minimizeBtn
 
--- Status labels
+-- Status Label
 local statusLabel = Instance.new("TextLabel")
-statusLabel.Size = UDim2.new(1, -20, 0, 25)
-statusLabel.Position = UDim2.fromOffset(10, 55)
+statusLabel.Size = UDim2.new(1, -20, 0, 30)
+statusLabel.Position = UDim2.new(0, 15, 0, 55)
 statusLabel.BackgroundTransparency = 1
-statusLabel.Text = "Status: READY"
-statusLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+statusLabel.Text = "Status: LOADED ✓"
+statusLabel.TextColor3 = Color3.fromRGB(0, 255, 150)
+statusLabel.TextScaled = true
 statusLabel.Font = Enum.Font.Gotham
-statusLabel.TextSize = 14
 statusLabel.TextXAlignment = Enum.TextXAlignment.Left
-statusLabel.Parent = frame
+statusLabel.Parent = mainFrame
 
-local bossLabel = Instance.new("TextLabel")
-bossLabel.Size = UDim2.new(1, -20, 0, 20)
-bossLabel.Position = UDim2.fromOffset(10, 85)
-bossLabel.BackgroundTransparency = 1
-bossLabel.Text = "Boss: None"
-bossLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-bossLabel.Font = Enum.Font.Gotham
-bossLabel.TextSize = 13
-bossLabel.TextXAlignment = Enum.TextXAlignment.Left
-bossLabel.Parent = frame
+-- Toggle Button
+local toggleButton = Instance.new("TextButton")
+toggleButton.Size = UDim2.new(1, -30, 0, 50)
+toggleButton.Position = UDim2.new(0, 15, 0, 90)
+toggleButton.BackgroundColor3 = Color3.fromRGB(255, 170, 0)
+toggleButton.Text = "🚀 START LOOP"
+toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleButton.TextScaled = true
+toggleButton.Font = Enum.Font.GothamBold
+toggleButton.Parent = mainFrame
 
--- Auto Loop Button
-local autoLoopBtn = Instance.new("TextButton")
-autoLoopBtn.Size = UDim2.new(1, -20, 0, 45)
-autoLoopBtn.Position = UDim2.fromOffset(10, 115)
-autoLoopBtn.BackgroundColor3 = Color3.fromRGB(255, 215, 0)
-autoLoopBtn.TextColor3 = Color3.fromRGB(0, 0, 0)
-autoLoopBtn.Text = "AUTO LOOP: OFF"
-autoLoopBtn.Font = Enum.Font.GothamBold
-autoLoopBtn.TextSize = 16
-autoLoopBtn.Parent = frame
-local loopCorner = Instance.new("UICorner")
-loopCorner.CornerRadius = UDim.new(0, 10)
-loopCorner.Parent = autoLoopBtn
+local toggleCorner = Instance.new("UICorner")
+toggleCorner.CornerRadius = UDim.new(0, 12)
+toggleCorner.Parent = toggleButton
 
--- ====== DRAG HELPER ======
-local function makeDraggable(obj, dragInputObj)
-\tlocal dragging = false
-\tlocal dragStart, startPos
+-- Content Frame (untuk minimize)
+local contentFrame = Instance.new("Frame")
+contentFrame.Size = UDim2.new(1, 0, 1, -45)
+contentFrame.Position = UDim2.new(0, 0, 0, 45)
+contentFrame.BackgroundTransparency = 1
+contentFrame.Parent = mainFrame
 
-\tlocal function update(input)
-\t\tlocal delta = input.Position - dragStart
-\t\tobj.Position = UDim2.new(
-\t\t\tstartPos.X.Scale,
-\t\t\tstartPos.X.Offset + delta.X,
-\t\t\tstartPos.Y.Scale,
-\t\t\tstartPos.Y.Offset + delta.Y
-\t\t)
-\tend
+-- DRAG FUNCTION
+local dragging = false
+local dragStart, startPos
+titleBar.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        dragStart = input.Position
+        startPos = mainFrame.Position
+    end
+end)
 
-\tdragInputObj.InputBegan:Connect(function(input)
-\t\tif input.UserInputType == Enum.UserInputType.MouseButton1
-\t\tor input.UserInputType == Enum.UserInputType.Touch then
-\t\t\tdragging = true
-\t\t\tdragStart = input.Position
-\t\t\tstartPos = obj.Position
+titleBar.InputChanged:Connect(function(input)
+    if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+        local delta = input.Position - dragStart
+        mainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        shadow.Position = UDim2.new(mainFrame.Position.X.Scale, mainFrame.Position.X.Offset - 4, mainFrame.Position.Y.Scale, mainFrame.Position.Y.Offset - 4)
+    end
+end)
 
-\t\t\tinput.Changed:Connect(function()
-\t\t\t\tif input.UserInputState == Enum.UserInputState.End then
-\t\t\t\t\tdragging = false
-\t\t\t\tend
-\t\t\tend)
-\t\tend
-\tend)
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = false
+    end
+end)
 
-\tUserInputService.InputChanged:Connect(function(input)
-\t\tif dragging and (input.UserInputType == Enum.UserInputType.MouseMovement
-\t\t\tor input.UserInputType == Enum.UserInputType.Touch) then
-\t\t\tupdate(input)
-\t\tend
-\tend)
-end
-
-makeDraggable(frame, dragHandle)
-makeDraggable(floatButton, floatButton)
-
--- ====== MINIMIZE / RESTORE ======
+-- MINIMIZE ANIMATION
 minimizeBtn.MouseButton1Click:Connect(function()
-\tframe.Visible = false
-\tfloatButton.Visible = true
+    frameMinimized = not frameMinimized
+    if frameMinimized then
+        minimizeBtn.Text = "+"
+        TweenService:Create(mainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Back), {Size = UDim2.new(0, 280, 0, miniFrameHeight)}):Play()
+        TweenService:Create(contentFrame, TweenInfo.new(0.3), {Size = UDim2.new(1, 0, 0, 0)}):Play()
+    else
+        minimizeBtn.Text = "−"
+        TweenService:Create(mainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Back), {Size = UDim2.new(0, 280, 0, mainFrameHeight)}):Play()
+        TweenService:Create(contentFrame, TweenInfo.new(0.3), {Size = UDim2.new(1, 0, 1, -45)}):Play()
+    end
 end)
 
-floatButton.MouseButton1Click:Connect(function()
-\tframe.Visible = true
-\tfloatButton.Visible = false
-end)
+-- Functions
+local function joinTrial()
+    if RiderTrialRemote then
+        RiderTrialRemote:FireServer("Trial of Diend")
+        StarterGui:SetCore("SendNotification", {Title = "⚡ TRIAL", Text = "JOINED!", Duration = 2})
+        print("TRIAL JOINED")
+    end
+end
 
--- ====== BOSS MONITOR & STATUS UPDATE ======
 local function updateStatus()
-\tlocal lives = getLivesFolder()
-\tlocal hasBoss70 = isBoss70Present()
-\tlocal hasBoss90 = isBoss90Present()
-\t
-\tif hasBoss70 then
-\t\tstatusLabel.Text = "Status: Boss Lv.70 LIVE"
-\t\tstatusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
-\t\tbossLabel.Text = "Boss: Hunter Lv.70"
-\t\tbossLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
-\telseif hasBoss90 then
-\t\tstatusLabel.Text = "Status: Boss Lv.90 LIVE"
-\t\tstatusLabel.TextColor3 = Color3.fromRGB(255, 165, 0)
-\t\tbossLabel.Text = "Boss: Hunter Lv.90"
-\t\tbossLabel.TextColor3 = Color3.fromRGB(255, 165, 0)
-\telse
-\t\tstatusLabel.Text = "Status: No Boss"
-\t\tstatusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
-\t\tbossLabel.Text = "Boss: None"
-\t\tbossLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
-\tend
+    local lives = workspace:FindFirstChild(LIVES_FOLDER_NAME)
+    local boss90 = lives and lives:FindFirstChild(BOSS_90_NAME)
+    
+    if waitingForRestart then
+        statusLabel.Text = "⏳ WAIT 15s..."
+        statusLabel.TextColor3 = Color3.fromRGB(255, 255, 0)
+    elseif boss90 then
+        statusLabel.Text = "⚔️ Lv.90 ALIVE"
+        statusLabel.TextColor3 = Color3.fromRGB(255, 165, 0)
+    else
+        statusLabel.Text = "✅ READY"
+        statusLabel.TextColor3 = Color3.fromRGB(0, 255, 150)
+    end
 end
 
--- ====== AUTO LOOP LOGIC ======
-autoLoopBtn.MouseButton1Click:Connect(function()
-\tif autoLoopEnabled then
-\t\t-- STOP LOOP
-\t\tautoLoopEnabled = false
-\t\tif loopConnection then loopConnection:Disconnect() end
-\t\tautoLoopBtn.BackgroundColor3 = Color3.fromRGB(255, 215, 0)
-\t\tautoLoopBtn.TextColor3 = Color3.fromRGB(0, 0, 0)
-\t\tautoLoopBtn.Text = "AUTO LOOP: OFF"
-\t\tstatusLabel.Text = "Status: STOPPED"
-\t\tstatusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
-\t\tStarterGui:SetCore("SendNotification", {Title = "Auto Loop", Text = "STOPPED", Duration = 2})
-\telse
-\t\t-- START LOOP
-\t\tautoLoopEnabled = true
-\t\tautoLoopBtn.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-\t\tautoLoopBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-\t\tautoLoopBtn.Text = "AUTO LOOP: ON"
-\t\t
-\t\tStarterGui:SetCore("SendNotification", {Title = "Auto Loop", Text = "Lv70→Lv90→10s→Repeat", Duration = 3})
-\t\t
-\t\t-- Initial trial start
-\t\tstartTrial()
-\t\tupdateStatus()
-\tend
+-- Toggle Button Logic
+toggleButton.MouseButton1Click:Connect(function()
+    autoLoopEnabled = not autoLoopEnabled
+    
+    if autoLoopEnabled then
+        toggleButton.Text = "⏹️ STOP LOOP"
+        toggleButton.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
+        statusLabel.Text = "🚀 STARTING..."
+        statusLabel.TextColor3 = Color3.fromRGB(0, 255, 255)
+        joinTrial()
+    else
+        toggleButton.Text = "🚀 START LOOP"
+        toggleButton.BackgroundColor3 = Color3.fromRGB(255, 170, 0)
+        statusLabel.Text = "⏸️ STOPPED"
+        statusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
+        waitingForRestart = false
+    end
 end)
 
--- ====== BOSS EVENT LISTENERS ======
-local lives = getLivesFolder()
-if lives then
-\tlives.ChildAdded:Connect(function(child)
-\t\tupdateStatus()
-\tend)
+-- Status Update Loop
+task.spawn(function()
+    while true do
+        updateStatus()
+        task.wait(0.5)
+    end
+end)
 
-\tlives.ChildRemoved:Connect(function(child)
-\t\tupdateStatus()
-\t\t
-\t\t-- Auto restart trial after Lv.90 dies (10s delay)
-\t\tif autoLoopEnabled and child.Name == BOSS_90_NAME then
-\t\t\tstatusLabel.Text = "Status: WAIT 10s..."
-\t\t\tstatusLabel.TextColor3 = Color3.fromRGB(255, 255, 0)
-\t\t\tStarterGui:SetCore("SendNotification", {Title = "Waiting", Text = "10s delay before next trial", Duration = 2})
-\t\t\t
-\t\t\ttask.wait(10)
-\t\t\tif autoLoopEnabled then
-\t\t\t\tstartTrial()
-\t\t\t\tupdateStatus()
-\t\t\tend
-\t\tend
-\tend)
+-- Boss Monitor
+local livesConnection
+local function startMonitoring()
+    local lives = workspace:FindFirstChild(LIVES_FOLDER_NAME)
+    if lives and not livesConnection then
+        livesConnection = lives.ChildRemoved:Connect(function(child)
+            if autoLoopEnabled and child.Name == BOSS_90_NAME then
+                print("Lv.90 DIED - 15s timer start")
+                waitingForRestart = true
+                statusLabel.Text = "⏳ WAIT 15s..."
+                statusLabel.TextColor3 = Color3.fromRGB(255, 255, 0)
+                
+                task.spawn(function()
+                    task.wait(DELAY_TIME) -- 15 detik
+                    if autoLoopEnabled then
+                        print("15s done - restarting trial")
+                        waitingForRestart = false
+                        joinTrial()
+                    end
+                end)
+            end
+        end)
+    end
 end
 
-updateStatus()
-
--- RightShift toggle GUI
-UserInputService.InputBegan:Connect(function(input, gp)
-\tif gp then return end
-\tif input.KeyCode == Enum.KeyCode.RightShift then
-\t\tlocal newState = not frame.Visible
-\t\tframe.Visible = newState
-\t\tfloatButton.Visible = not newState
-\tend
+task.spawn(function()
+    while true do
+        startMonitoring()
+        task.wait(1)
+    end
 end)
+
+-- Success Notification
+StarterGui:SetCore("SendNotification", {
+    Title = "🎮 TRIAL AUTO", 
+    Text = "Modern GUI LOADED! Drag title bar", 
+    Duration = 5
+})
+
+print("=== MODERN GUI FULLY ACTIVE ===")
