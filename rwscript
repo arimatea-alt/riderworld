@@ -1,238 +1,46 @@
-print("Rider Trial Auto") -- LocalScript (StarterPlayerScripts)
+print("Rider Trial Auto - Diend Loop") -- LocalScript (StarterPlayerScripts)
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local StarterGui = game:GetService("StarterGui")
 local UserInputService = game:GetService("UserInputService")
 local WORKSPACE = game:GetService("Workspace")
-local TweenService = game:GetService("TweenService")
 
 -- ====== Remote ======
 local RiderTrialRemote = ReplicatedStorage:WaitForChild("Remote"):WaitForChild("Event"):WaitForChild("RiderTrial")
-local DimensionWorldRemote = ReplicatedStorage:WaitForChild("Remote"):WaitForChild("Specific"):WaitForChild("DimensionWorldRemote")
 
 local player = Players.LocalPlayer
 
 -- ====== Boss Config ======
 local LIVES_FOLDER_NAME = "Lives"
-local BOSS_NAME = "Hunter Lv.70"
+local BOSS_70_NAME = "Hunter Lv.70"
+local BOSS_90_NAME = "Hunter Lv.90"
 
 local function getLivesFolder()
-	return WORKSPACE:FindFirstChild(LIVES_FOLDER_NAME)
+\treturn WORKSPACE:FindFirstChild(LIVES_FOLDER_NAME)
 end
 
-local function isBossPresent()
-	local lives = getLivesFolder()
-	return lives and lives:FindFirstChild(BOSS_NAME) ~= nil
+local function isBoss70Present()
+\tlocal lives = getLivesFolder()
+\treturn lives and lives:FindFirstChild(BOSS_70_NAME) ~= nil
 end
 
-local function getBossModel()
-	local lives = getLivesFolder()
-	if not lives then return nil end
-	return lives:FindFirstChild(BOSS_NAME)
+local function isBoss90Present()
+\tlocal lives = getLivesFolder()
+\treturn lives and lives:FindFirstChild(BOSS_90_NAME) ~= nil
 end
 
--- ====== AUTO EQUIP ATTACK TOOL ======
-local TOOL_NAME = "Attack"
-
-local function equipAttackTool()
-	local character = player.Character or player.CharacterAdded:Wait()
-	local humanoid = character:WaitForChild("Humanoid")
-	local backpack = player:WaitForChild("Backpack")
-
-	local tool = backpack:FindFirstChild(TOOL_NAME)
-	if tool and tool:IsA("Tool") then
-		humanoid:EquipTool(tool)
-	end
-end
-
-if player.Character then
-	equipAttackTool()
-end
-
-player.CharacterAdded:Connect(function()
-	task.wait(0.5)
-	equipAttackTool()
-end)
-
--- ====== GET HANDLER EVENT (COMMON) ======
-local function getHandlerEvent()
-	local character = player.Character
-	if not character or not character.Parent then return nil end
-
-	local ok, result = pcall(function()
-		local handler = character:WaitForChild("PlayerHandler", 3)
-		if not handler then return nil end
-		return handler:WaitForChild("HandlerEvent", 3)
-	end)
-
-	return ok and result or nil
-end
-
--- ====== AUTO HENSHIN ======
-local function autoHenshin()
-	local handlerEvent = getHandlerEvent()
-	if not handlerEvent then return false end
-
-	local success = pcall(function()
-		local args = { { Henshin = true } }
-		handlerEvent:FireServer(unpack(args))
-	end)
-
-	if success then
-		StarterGui:SetCore("SendNotification", {Title = "Henshin", Text = "EXECUTED!", Duration = 2})
-		return true
-	end
-	return false
-end
-
--- ====== AUTO SHARK (7s) ======
-local function executeAutoShark()
-	task.wait(7)
-	DimensionWorldRemote:InvokeServer({"GUI"})
-	task.wait(0.5)
-	DimensionWorldRemote:InvokeServer({"WeaponSelected", "Shark", "Shark Vent"})
-	task.wait(0.5)
-	DimensionWorldRemote:InvokeServer({"Transform", "Shark"})
-	StarterGui:SetCore("SendNotification", {Title = "Shark", Text = "COMPLETE!", Duration = 2})
-
-	task.delay(2, function()
-		equipAttackTool()
-		StarterGui:SetCore("SendNotification", {Title = "Attack", Text = "EQUIPPED!", Duration = 2})
-	end)
-end
-
--- ====== AUTO ATTACK (HEAVY + E + V SPAM) ======
-local MOUSE_CFRAME = CFrame.new(-2678.40234375, 0.7871074, -674.6618652, 1,0,0, 0,1,0, 0,0,1)
-
-local autoAttackRunning = false
-local ATTACK_DELAY = 0.5 -- delay spam semua skill (atur sesuai aman/nyaman)
-
-local function fireHeavyAttack()
-	local handlerEvent = getHandlerEvent()
-	if not handlerEvent then return end
-
-	local args = {
-		{
-			CombatAction = true,
-			AttackType = "Down",
-			HeavyAttack = true,
-			MouseData = MOUSE_CFRAME
-		}
-	}
-	handlerEvent:FireServer(unpack(args))
-end
-
-local function fireSkill(key)
-	local handlerEvent = getHandlerEvent()
-	if not handlerEvent then return end
-
-	local args = {
-		{
-			Skill = true,
-			AttackType = "Down",
-			Key = key,
-			MouseData = MOUSE_CFRAME
-		}
-	}
-	handlerEvent:FireServer(unpack(args))
-end
-
-local function startAutoAttack()
-	if autoAttackRunning then return end
-	autoAttackRunning = true
-
-	task.spawn(function()
-		while autoAttackRunning and isBossPresent() do
-			-- tekan semuanya sekaligus
-			fireHeavyAttack()
-			fireSkill("E")
-			fireSkill("V")
-
-			task.wait(ATTACK_DELAY)
-		end
-
-		autoAttackRunning = false
-	end)
-end
-
-local function stopAutoAttack()
-	autoAttackRunning = false
-end
-
--- ====== AUTO APPROACH BOSS (~7 studs) ======
-local autoApproachRunning = false
-
-local function startAutoApproach()
-	if autoApproachRunning then return end
-	autoApproachRunning = true
-
-	task.spawn(function()
-		while autoApproachRunning and isBossPresent() do
-			local boss = getBossModel()
-			local character = player.Character
-			if boss and character and character:FindFirstChild("HumanoidRootPart") then
-				local hrp = character.HumanoidRootPart
-				local bossRoot = boss:FindFirstChild("HumanoidRootPart") or boss:FindFirstChild("Torso") or boss.PrimaryPart
-
-				if bossRoot then
-					local bossPos = bossRoot.Position
-					local playerPos = hrp.Position
-					local dir = (bossPos - playerPos)
-
-					if dir.Magnitude > 0 then
-						local targetPos
-						if dir.Magnitude > 7 then
-							local unit = dir.Unit
-							targetPos = bossPos - unit * 7
-						else
-							targetPos = playerPos
-						end
-
-						local tweenInfo = TweenInfo.new(0.35, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
-						local tween = TweenService:Create(hrp, tweenInfo, {CFrame = CFrame.new(targetPos, bossPos)})
-						tween:Play()
-					end
-				end
-			end
-
-			task.wait(0.4)
-		end
-
-		autoApproachRunning = false
-	end)
-end
-
-local function stopAutoApproach()
-	autoApproachRunning = false
-end
-
--- ====== SEQUENCES (TRIAL FLOW) ======
+-- ====== TRIAL FUNCTIONS ======
 local function startTrial()
-	RiderTrialRemote:FireServer("Trial of Diend")
-end
-
-local function initialSequence()
-	task.wait(2)
-	autoHenshin()
-	task.wait(1)
-	task.spawn(executeAutoShark)
-end
-
-local function respawnSequence()
-	task.wait(5)
-	autoHenshin()
-	task.wait(1)
-	task.spawn(executeAutoShark)
+\tRiderTrialRemote:FireServer("Trial of Diend")
+\tStarterGui:SetCore("SendNotification", {Title = "Trial", Text = "STARTED!", Duration = 2})
 end
 
 -- ====== AUTO LOOP STATE ======
 local autoLoopEnabled = false
 local loopConnection = nil
-local autoResetEnabled = true
 
--- ================= GUI + FLOATING CIRCLE ICON =================
-
+-- ====== GUI ======
 local playerGui = player:WaitForChild("PlayerGui")
 local gui = Instance.new("ScreenGui")
 gui.Name = "TrialAuto"
@@ -241,8 +49,8 @@ gui.Parent = playerGui
 
 -- Frame utama
 local frame = Instance.new("Frame")
-frame.Size = UDim2.fromOffset(280, 220)
-frame.Position = UDim2.new(0, 20, 0.5, -110)
+frame.Size = UDim2.fromOffset(280, 120)
+frame.Position = UDim2.new(0, 20, 0.5, -60)
 frame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
 frame.BorderSizePixel = 0
 frame.Parent = gui
@@ -252,8 +60,8 @@ frameCorner.Parent = frame
 
 local gradient = Instance.new("UIGradient")
 gradient.Color = ColorSequence.new{
-	ColorSequenceKeypoint.new(0, Color3.fromRGB(45, 45, 55)),
-	ColorSequenceKeypoint.new(1, Color3.fromRGB(25, 25, 30))
+\tColorSequenceKeypoint.new(0, Color3.fromRGB(45, 45, 55)),
+\tColorSequenceKeypoint.new(1, Color3.fromRGB(25, 25, 30))
 }
 gradient.Rotation = 45
 gradient.Parent = frame
@@ -273,7 +81,7 @@ local title = Instance.new("TextLabel")
 title.Size = UDim2.new(1, -70, 1, 0)
 title.Position = UDim2.new(0, 15, 0, 0)
 title.BackgroundTransparency = 1
-title.Text = "TRIAL AUTO"
+title.Text = "TRIAL DIEND LOOP"
 title.TextColor3 = Color3.fromRGB(0, 255, 150)
 title.Font = Enum.Font.GothamBold
 title.TextSize = 18
@@ -304,14 +112,14 @@ local minimizeCorner = Instance.new("UICorner")
 minimizeCorner.CornerRadius = UDim.new(1, 0)
 minimizeCorner.Parent = minimizeBtn
 
--- Floating icon bulat kecil
+-- Floating icon
 local floatButton = Instance.new("TextButton")
 floatButton.Name = "TrialAutoFloat"
 floatButton.Size = UDim2.fromOffset(48, 48)
 floatButton.Position = UDim2.new(0, 10, 0.5, -24)
 floatButton.BackgroundColor3 = Color3.fromRGB(0, 255, 150)
 floatButton.TextColor3 = Color3.fromRGB(0, 0, 0)
-floatButton.Text = "TA"
+floatButton.Text = "TD"
 floatButton.Font = Enum.Font.GothamBold
 floatButton.TextSize = 16
 floatButton.AutoButtonColor = true
@@ -321,51 +129,33 @@ local floatCorner = Instance.new("UICorner")
 floatCorner.CornerRadius = UDim.new(1, 0)
 floatCorner.Parent = floatButton
 
--- ====== DRAG HELPER ======
-local function makeDraggable(obj, dragInputObj)
-	local dragging = false
-	local dragStart, startPos
+-- Status labels
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Size = UDim2.new(1, -20, 0, 25)
+statusLabel.Position = UDim2.fromOffset(10, 55)
+statusLabel.BackgroundTransparency = 1
+statusLabel.Text = "Status: READY"
+statusLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+statusLabel.Font = Enum.Font.Gotham
+statusLabel.TextSize = 14
+statusLabel.TextXAlignment = Enum.TextXAlignment.Left
+statusLabel.Parent = frame
 
-	local function update(input)
-		local delta = input.Position - dragStart
-		obj.Position = UDim2.new(
-			startPos.X.Scale,
-			startPos.X.Offset + delta.X,
-			startPos.Y.Scale,
-			startPos.Y.Offset + delta.Y
-		)
-	end
+local bossLabel = Instance.new("TextLabel")
+bossLabel.Size = UDim2.new(1, -20, 0, 20)
+bossLabel.Position = UDim2.fromOffset(10, 85)
+bossLabel.BackgroundTransparency = 1
+bossLabel.Text = "Boss: None"
+bossLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+bossLabel.Font = Enum.Font.Gotham
+bossLabel.TextSize = 13
+bossLabel.TextXAlignment = Enum.TextXAlignment.Left
+bossLabel.Parent = frame
 
-	dragInputObj.InputBegan:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1
-		or input.UserInputType == Enum.UserInputType.Touch then
-			dragging = true
-			dragStart = input.Position
-			startPos = obj.Position
-
-			input.Changed:Connect(function()
-				if input.UserInputState == Enum.UserInputState.End then
-					dragging = false
-				end
-			end)
-		end
-	end)
-
-	UserInputService.InputChanged:Connect(function(input)
-		if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement
-			or input.UserInputType == Enum.UserInputType.Touch) then
-			update(input)
-		end
-	end)
-end
-
-makeDraggable(frame, dragHandle)
-makeDraggable(floatButton, floatButton)
-
--- ====== BUTTONS DI FRAME ======
+-- Auto Loop Button
 local autoLoopBtn = Instance.new("TextButton")
 autoLoopBtn.Size = UDim2.new(1, -20, 0, 45)
-autoLoopBtn.Position = UDim2.fromOffset(10, 55)
+autoLoopBtn.Position = UDim2.fromOffset(10, 115)
 autoLoopBtn.BackgroundColor3 = Color3.fromRGB(255, 215, 0)
 autoLoopBtn.TextColor3 = Color3.fromRGB(0, 0, 0)
 autoLoopBtn.Text = "AUTO LOOP: OFF"
@@ -376,138 +166,142 @@ local loopCorner = Instance.new("UICorner")
 loopCorner.CornerRadius = UDim.new(0, 10)
 loopCorner.Parent = autoLoopBtn
 
-local trialBtn = Instance.new("TextButton")
-trialBtn.Size = UDim2.new(1, -20, 0, 40)
-trialBtn.Position = UDim2.fromOffset(10, 110)
-trialBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
-trialBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-trialBtn.Text = "START TRIAL"
-trialBtn.Font = Enum.Font.GothamBold
-trialBtn.TextSize = 15
-trialBtn.Parent = frame
-local trialCorner = Instance.new("UICorner")
-trialCorner.CornerRadius = UDim.new(0, 10)
-trialCorner.Parent = trialBtn
+-- ====== DRAG HELPER ======
+local function makeDraggable(obj, dragInputObj)
+\tlocal dragging = false
+\tlocal dragStart, startPos
 
-local resetBtn = Instance.new("TextButton")
-resetBtn.Size = UDim2.new(1, -20, 0, 35)
-resetBtn.Position = UDim2.fromOffset(10, 160)
-resetBtn.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-resetBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-resetBtn.Text = "RESET: ON"
-resetBtn.Font = Enum.Font.GothamBold
-resetBtn.TextSize = 14
-resetBtn.Parent = frame
-local resetCorner = Instance.new("UICorner")
-resetCorner.CornerRadius = UDim.new(0, 10)
-resetCorner.Parent = resetBtn
+\tlocal function update(input)
+\t\tlocal delta = input.Position - dragStart
+\t\tobj.Position = UDim2.new(
+\t\t\tstartPos.X.Scale,
+\t\t\tstartPos.X.Offset + delta.X,
+\t\t\tstartPos.Y.Scale,
+\t\t\tstartPos.Y.Offset + delta.Y
+\t\t)
+\tend
 
-local bossLabel = Instance.new("TextLabel")
-bossLabel.Size = UDim2.new(1, -20, 0, 20)
-bossLabel.Position = UDim2.fromOffset(10, 205)
-bossLabel.BackgroundTransparency = 1
-bossLabel.Text = "Boss: Hunter Lv.70"
-bossLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-bossLabel.Font = Enum.Font.Gotham
-bossLabel.TextSize = 13
-bossLabel.TextXAlignment = Enum.TextXAlignment.Left
-bossLabel.Parent = frame
+\tdragInputObj.InputBegan:Connect(function(input)
+\t\tif input.UserInputType == Enum.UserInputType.MouseButton1
+\t\tor input.UserInputType == Enum.UserInputType.Touch then
+\t\t\tdragging = true
+\t\t\tdragStart = input.Position
+\t\t\tstartPos = obj.Position
+
+\t\t\tinput.Changed:Connect(function()
+\t\t\t\tif input.UserInputState == Enum.UserInputState.End then
+\t\t\t\t\tdragging = false
+\t\t\t\tend
+\t\t\tend)
+\t\tend
+\tend)
+
+\tUserInputService.InputChanged:Connect(function(input)
+\t\tif dragging and (input.UserInputType == Enum.UserInputType.MouseMovement
+\t\t\tor input.UserInputType == Enum.UserInputType.Touch) then
+\t\t\tupdate(input)
+\t\tend
+\tend)
+end
+
+makeDraggable(frame, dragHandle)
+makeDraggable(floatButton, floatButton)
 
 -- ====== MINIMIZE / RESTORE ======
 minimizeBtn.MouseButton1Click:Connect(function()
-	frame.Visible = false
-	floatButton.Visible = true
+\tframe.Visible = false
+\tfloatButton.Visible = true
 end)
 
 floatButton.MouseButton1Click:Connect(function()
-	frame.Visible = true
-	floatButton.Visible = false
+\tframe.Visible = true
+\tfloatButton.Visible = false
 end)
 
--- ====== BUTTON EVENTS (AUTO LOOP/TRIAL/RESET) ======
-autoLoopBtn.MouseButton1Click:Connect(function()
-	if autoLoopEnabled then
-		autoLoopEnabled = false
-		if loopConnection then loopConnection:Disconnect() end
-		autoLoopBtn.BackgroundColor3 = Color3.fromRGB(255, 215, 0)
-		autoLoopBtn.TextColor3 = Color3.fromRGB(0, 0, 0)
-		autoLoopBtn.Text = "AUTO LOOP: OFF"
-		StarterGui:SetCore("SendNotification", {Title = "Auto Loop", Text = "STOPPED", Duration = 2})
-	else
-		autoLoopEnabled = true
-		autoLoopBtn.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-		autoLoopBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-		autoLoopBtn.Text = "AUTO LOOP: ON"
-
-		startTrial()
-		task.spawn(initialSequence)
-
-		loopConnection = player.CharacterAdded:Connect(function()
-			if not autoLoopEnabled then return end
-			task.spawn(function()
-				respawnSequence()
-				task.wait(3) -- delay 3 detik setelah respawn sebelum trial berikutnya
-				if autoLoopEnabled then
-					startTrial()
-				end
-			end)
-		end)
-
-		StarterGui:SetCore("SendNotification", {Title = "Auto Loop", Text = "2s→Henshin→Shark7s→Approach+AutoAtk", Duration = 3})
-	end
-end)
-
-trialBtn.MouseButton1Click:Connect(function()
-	startTrial()
-	StarterGui:SetCore("SendNotification", {Title = "Trial", Text = "STARTED!", Duration = 2})
-end)
-
-resetBtn.MouseButton1Click:Connect(function()
-	autoResetEnabled = not autoResetEnabled
-	resetBtn.BackgroundColor3 = autoResetEnabled and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0)
-	resetBtn.Text = autoResetEnabled and "RESET: ON" or "RESET: OFF"
-end)
-
--- ====== BOSS MONITOR + AUTO ATTACK & APPROACH START/STOP ======
-local function updateBossStatus()
-	local present = isBossPresent()
-	bossLabel.TextColor3 = present and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 100, 100)
-	bossLabel.Text = present and "[LIVE] Boss: Hunter Lv.70" or "[DEAD] Boss: Hunter Lv.70"
+-- ====== BOSS MONITOR & STATUS UPDATE ======
+local function updateStatus()
+\tlocal lives = getLivesFolder()
+\tlocal hasBoss70 = isBoss70Present()
+\tlocal hasBoss90 = isBoss90Present()
+\t
+\tif hasBoss70 then
+\t\tstatusLabel.Text = "Status: Boss Lv.70 LIVE"
+\t\tstatusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+\t\tbossLabel.Text = "Boss: Hunter Lv.70"
+\t\tbossLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+\telseif hasBoss90 then
+\t\tstatusLabel.Text = "Status: Boss Lv.90 LIVE"
+\t\tstatusLabel.TextColor3 = Color3.fromRGB(255, 165, 0)
+\t\tbossLabel.Text = "Boss: Hunter Lv.90"
+\t\tbossLabel.TextColor3 = Color3.fromRGB(255, 165, 0)
+\telse
+\t\tstatusLabel.Text = "Status: No Boss"
+\t\tstatusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
+\t\tbossLabel.Text = "Boss: None"
+\t\tbossLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
+\tend
 end
 
+-- ====== AUTO LOOP LOGIC ======
+autoLoopBtn.MouseButton1Click:Connect(function()
+\tif autoLoopEnabled then
+\t\t-- STOP LOOP
+\t\tautoLoopEnabled = false
+\t\tif loopConnection then loopConnection:Disconnect() end
+\t\tautoLoopBtn.BackgroundColor3 = Color3.fromRGB(255, 215, 0)
+\t\tautoLoopBtn.TextColor3 = Color3.fromRGB(0, 0, 0)
+\t\tautoLoopBtn.Text = "AUTO LOOP: OFF"
+\t\tstatusLabel.Text = "Status: STOPPED"
+\t\tstatusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
+\t\tStarterGui:SetCore("SendNotification", {Title = "Auto Loop", Text = "STOPPED", Duration = 2})
+\telse
+\t\t-- START LOOP
+\t\tautoLoopEnabled = true
+\t\tautoLoopBtn.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+\t\tautoLoopBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+\t\tautoLoopBtn.Text = "AUTO LOOP: ON"
+\t\t
+\t\tStarterGui:SetCore("SendNotification", {Title = "Auto Loop", Text = "Lv70→Lv90→10s→Repeat", Duration = 3})
+\t\t
+\t\t-- Initial trial start
+\t\tstartTrial()
+\t\tupdateStatus()
+\tend
+end)
+
+-- ====== BOSS EVENT LISTENERS ======
 local lives = getLivesFolder()
 if lives then
-	lives.ChildAdded:Connect(function(child)
-		if child.Name == BOSS_NAME then
-			updateBossStatus()
-			startAutoAttack()
-			startAutoApproach()
-		end
-	end)
+\tlives.ChildAdded:Connect(function(child)
+\t\tupdateStatus()
+\tend)
 
-	lives.ChildRemoved:Connect(function(child)
-		if child.Name == BOSS_NAME then
-			updateBossStatus()
-			stopAutoAttack()
-			stopAutoApproach()
-
-			if autoResetEnabled then
-				task.wait(0.5)
-				local character = player.Character
-				if character and character:FindFirstChild("Humanoid") then
-					character.Humanoid.Health = 0
-				end
-			end
-		end
-	end)
+\tlives.ChildRemoved:Connect(function(child)
+\t\tupdateStatus()
+\t\t
+\t\t-- Auto restart trial after Lv.90 dies (10s delay)
+\t\tif autoLoopEnabled and child.Name == BOSS_90_NAME then
+\t\t\tstatusLabel.Text = "Status: WAIT 10s..."
+\t\t\tstatusLabel.TextColor3 = Color3.fromRGB(255, 255, 0)
+\t\t\tStarterGui:SetCore("SendNotification", {Title = "Waiting", Text = "10s delay before next trial", Duration = 2})
+\t\t\t
+\t\t\ttask.wait(10)
+\t\t\tif autoLoopEnabled then
+\t\t\t\tstartTrial()
+\t\t\t\tupdateStatus()
+\t\t\tend
+\t\tend
+\tend)
 end
-updateBossStatus()
 
+updateStatus()
+
+-- RightShift toggle GUI
 UserInputService.InputBegan:Connect(function(input, gp)
-	if gp then return end
-	if input.KeyCode == Enum.KeyCode.RightShift then
-		local newState = not frame.Visible
-		frame.Visible = newState
-		floatButton.Visible = not newState
-	end
+\tif gp then return end
+\tif input.KeyCode == Enum.KeyCode.RightShift then
+\t\tlocal newState = not frame.Visible
+\t\tframe.Visible = newState
+\t\tfloatButton.Visible = not newState
+\tend
 end)
